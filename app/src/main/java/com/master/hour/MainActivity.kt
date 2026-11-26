@@ -8,6 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.ImageView
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -83,18 +88,31 @@ fun MasterApp(dao: EntryDao) {
     val all by dao.observeAll().collectAsState(initial=emptyList())
     val actions=listOf(HomeAction("Доходы",Icons.Default.AccountBalanceWallet,"income"),HomeAction("Расходы",Icons.Default.ShoppingCart,"expense"),HomeAction("Заявки",Icons.Default.CalendarMonth,"request"),HomeAction("Аналитика",Icons.Default.BarChart,"info"),HomeAction("Материалы",Icons.Default.CollectionsBookmark,"materials"),HomeAction("Средняя цена",Icons.Default.Search,"prices"))
     val titles=mapOf("income" to "Доходы","expense" to "Расходы","request" to "Заявки","info" to "Аналитика","prices" to "Средняя цена","materials" to "Материалы")
-    MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF315C73),onPrimary=Color.White,primaryContainer=Color(0xFFDCE8EF),secondary=Color(0xFFC07A45),background=Color(0xFFF3F5F7),surface=Color.White)){
+    MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF203B63),onPrimary=Color.White,primaryContainer=Color(0xFFD8E3F1),secondary=Color(0xFF5279A8),background=Color(0xFFEAF0F7),surface=Color.White)){
         Scaffold(containerColor=MaterialTheme.colorScheme.background){padding->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=18.dp,vertical=14.dp)){
                 if(page=="home"){
                     Text("МАСТЕР НА ЧАС",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)
                     Text("Рабочий кабинет",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
-                    Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFF176B55))){
-                        Column(Modifier.padding(20.dp)){
-                            Text("ЗАРАБОТАНО ВСЕГО",color=Color.White.copy(alpha=.8f))
-                            Text(incomes.sumOf{it.amount}.toString()+" ₸",color=Color.White,style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-                            Text(incomes.size.toString()+" выполненных работ",color=Color.White.copy(alpha=.85f))
+                    Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFF203B63))){
+                        Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                            Text(if(requests.isEmpty()) "ПОЛЕЗНОЕ" else "БЛИЖАЙШИЕ ЗАЯВКИ",color=Color.White.copy(alpha=.78f),fontWeight=FontWeight.Bold)
+                            if(requests.isEmpty()){
+                                Text("Пока активных заказов нет",color=Color.White,style=MaterialTheme.typography.titleMedium)
+                                Text("Добавляй новые заявки, чтобы держать планы под рукой",color=Color.White.copy(alpha=.82f),style=MaterialTheme.typography.bodySmall)
+                            } else {
+                                requests.take(3).forEach { req ->
+                                    Row(verticalAlignment=Alignment.CenterVertically){
+                                        Column(Modifier.weight(1f)){
+                                            Text(req.title,color=Color.White,fontWeight=FontWeight.SemiBold,maxLines=1)
+                                            if(req.address.isNotBlank()) Text(req.address,color=Color.White.copy(alpha=.75f),style=MaterialTheme.typography.bodySmall,maxLines=1)
+                                        }
+                                        if(req.amount>0) Text("${req.amount} ₸",color=Color.White,fontWeight=FontWeight.Bold)
+                                    }
+                                }
+                                TextButton(onClick={page="request"}){Text("Все заявки",color=Color(0xFFD8E3F1))}
+                            }
                         }
                     }
                     Spacer(Modifier.height(18.dp))
@@ -122,7 +140,7 @@ fun MasterApp(dao: EntryDao) {
                     Spacer(Modifier.height(8.dp))
                     when(page){
                         "income"->DayLedger(incomes,true,{showAdd=true},{showPicker=true},{item->scope.launch{dao.delete(item)}})
-                        "expense"->ExpenseScreen(expenses,{showAdd=true},{item->scope.launch{dao.delete(item)}})
+                        "expense"->ExpenseScreen(expenses,{showAdd=true},{item->scope.launch{dao.delete(item)}},{item,title,amount->scope.launch{dao.insert(item.copy(title=title,amount=amount));dao.delete(item)}})
                         "request"->RequestScreen(requests,{title,address,amount,note->scope.launch{dao.insert(Entry(type="request",title=title,address=address,amount=amount,note=note))}},{item->scope.launch{dao.completeRequest(item.id)}},{item->scope.launch{dao.delete(item)}})
                         "info"->InfoScreen(incomes,expenses,requests,all)
                         "prices"->PriceSearchScreen(incomes)
@@ -161,7 +179,7 @@ fun DayLedger(entries:List<Entry>,isIncome:Boolean,onAdd:()->Unit,onPick:()->Uni
     Column(Modifier.fillMaxSize()){
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
             Button(onClick=onAdd,modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Add,null);Text("Новая запись")}
-            if(isIncome)OutlinedButton(onClick=onPick,modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Checklist,null);Text("Выбрать заявки")}
+            if(isIncome)OutlinedButton(onClick=onPick,modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Assignment,null);Text("Список заявок")}
         }
         Spacer(Modifier.height(13.dp))
         Text("ИСТОРИЯ · ПО ДНЯМ",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.secondary,fontWeight=FontWeight.Bold)
@@ -196,17 +214,33 @@ fun DayLedger(entries:List<Entry>,isIncome:Boolean,onAdd:()->Unit,onPick:()->Uni
 }
 
 @Composable
-fun ExpenseScreen(entries:List<Entry>,onAdd:()->Unit,onDelete:(Entry)->Unit){
+fun ExpenseScreen(entries:List<Entry>,onAdd:()->Unit,onDelete:(Entry)->Unit,onEdit:(Entry,String,Long)->Unit){
+    var editing by remember{mutableStateOf<Entry?>(null)}
     Column(Modifier.fillMaxSize()){
         Button(onClick=onAdd,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Text("Добавить расход")}
-        Spacer(Modifier.height(10.dp))
-        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(entries,key={it.id}){item->
-            Card{Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                Text(item.title,Modifier.weight(1f),fontWeight=FontWeight.Medium)
-                Text("${item.amount} ₸",fontWeight=FontWeight.Bold)
-                IconButton(onClick={onDelete(item)}){Icon(Icons.Default.Close,"Удалить")}
-            }}
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth().background(Color(0xFFD8E3F1),RoundedCornerShape(8.dp)).padding(10.dp)){
+            Text("НАЗВАНИЕ",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+            Text("СУММА",style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+            Spacer(Modifier.width(68.dp))
+        }
+        LazyColumn{items(entries,key={it.id}){item->
+            Row(Modifier.fillMaxWidth().clickable{editing=item}.padding(horizontal=8.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically){
+                Text(item.title,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,maxLines=1)
+                Text("${item.amount} ₸",style=MaterialTheme.typography.bodySmall,fontWeight=FontWeight.SemiBold)
+                IconButton(onClick={editing=item},modifier=Modifier.size(34.dp)){Icon(Icons.Default.Edit,"Изменить",modifier=Modifier.size(17.dp))}
+                IconButton(onClick={onDelete(item)},modifier=Modifier.size(34.dp)){Icon(Icons.Default.Delete,"Удалить",modifier=Modifier.size(17.dp))}
+            }
+            HorizontalDivider(color=Color(0xFFDCE3EC))
         }}
+    }
+    editing?.let{item->
+        var title by remember(item.id){mutableStateOf(item.title)}
+        var amount by remember(item.id){mutableStateOf(item.amount.toString())}
+        AlertDialog(onDismissRequest={editing=null},title={Text("Изменить расход")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(title,{title=it},label={Text("Расходы")},singleLine=true)
+            OutlinedTextField(amount,{amount=it.filter{c->c.isDigit()}},label={Text("Сумма, ₸")},singleLine=true)
+        }},confirmButton={TextButton(enabled=title.isNotBlank()&&amount.toLongOrNull()!=null,onClick={onEdit(item,title.trim(),amount.toLong());editing=null}){Text("Сохранить")}},dismissButton={TextButton(onClick={editing=null}){Text("Отмена")}})
     }
 }
 
@@ -242,19 +276,29 @@ fun MaterialScreen(entries:List<Entry>,onSave:(String,String,String)->Unit,onDel
     }
     Column(Modifier.fillMaxSize()){
         Button(onClick={picker.launch(arrayOf("image/*","video/*"))},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Text("Добавить фото или видео")}
-        Text("Рабочие схемы, размеры и инструкции",style=MaterialTheme.typography.bodySmall)
-        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(entries,key={it.id}){item->
-            Card{Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                Icon(if(item.note.startsWith("video/"))Icons.Default.PlayCircle else Icons.Default.Image,null)
-                Text(item.title,Modifier.weight(1f).padding(horizontal=10.dp),fontWeight=FontWeight.Medium)
-                IconButton(onClick={runCatching{context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(android.net.Uri.parse(item.address),item.note).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))}}){Icon(Icons.Default.OpenInNew,"Открыть")}
-                IconButton(onClick={onDelete(item)}){Icon(Icons.Default.Delete,"Удалить")}
-            }}
-        }}
+        Text("Материалы карточками для визуального поиска",style=MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(8.dp))
+        LazyVerticalGrid(columns=GridCells.Fixed(2),verticalArrangement=Arrangement.spacedBy(10.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+            gridItems(entries,key={it.id}){item->
+                Card(shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()){
+                    Column{
+                        Box(Modifier.fillMaxWidth().height(126.dp).background(Color(0xFFD8E3F1)),contentAlignment=Alignment.Center){
+                            if(item.note.startsWith("image/")){
+                                AndroidView(factory={ctx->ImageView(ctx).apply{scaleType=ImageView.ScaleType.CENTER_CROP;setImageURI(android.net.Uri.parse(item.address))}},modifier=Modifier.fillMaxSize(),update={it.setImageURI(android.net.Uri.parse(item.address))})
+                            }else Icon(Icons.Default.PlayCircle,null,tint=Color(0xFF203B63),modifier=Modifier.size(48.dp))
+                        }
+                        Row(Modifier.fillMaxWidth().padding(start=9.dp,end=4.dp,top=5.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically){
+                            Text(item.title,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,fontWeight=FontWeight.SemiBold,maxLines=2)
+                            IconButton(onClick={runCatching{context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(android.net.Uri.parse(item.address),item.note).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))}},modifier=Modifier.size(32.dp)){Icon(Icons.Default.OpenInNew,"Открыть",modifier=Modifier.size(17.dp))}
+                            IconButton(onClick={onDelete(item)},modifier=Modifier.size(32.dp)){Icon(Icons.Default.Delete,"Удалить",modifier=Modifier.size(17.dp))}
+                        }
+                    }
+                }
+            }
+        }
     }
-    if(chosen!=null)AlertDialog(onDismissRequest={chosen=null},title={Text("Название материала")},text={OutlinedTextField(title,{title=it},label={Text("Например, установка газлифта")})},confirmButton={TextButton(enabled=title.isNotBlank(),onClick={val u=chosen!!;onSave(title.trim(),u.toString(),context.contentResolver.getType(u)?:"application/octet-stream");chosen=null}){Text("Сохранить")}},dismissButton={TextButton(onClick={chosen=null}){Text("Отмена")}})
+    if(chosen!=null)AlertDialog(onDismissRequest={chosen=null},title={Text("Название материала")},text={OutlinedTextField(title,{title=it},label={Text("Например, установка газлифта")})},confirmButton={TextButton(enabled=title.isNotBlank(),onClick={val u=chosen!!;onSave(title.trim(),u.toString(),context.contentResolver.getType(u)?:"application/octet-stream");chosen=null;title=""}){Text("Сохранить")}},dismissButton={TextButton(onClick={chosen=null}){Text("Отмена")}})
 }
-
 @Composable
 fun EntryList(entries:List<Entry>,isRequest:Boolean,onDone:(Entry)->Unit={},onDelete:(Entry)->Unit){
     if(entries.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("Пока записей нет")}
@@ -328,7 +372,7 @@ fun AddEntryDialog(type: String, onDismiss: () -> Unit, onSave: (String, String,
         title = { Text(label) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text(if (type == "expense") "На что потратил" else if(type=="income") "Проделанная работа" else "Что сделать?") }, singleLine = true)
+                OutlinedTextField(title, { title = it }, label = { Text(if (type == "expense") "Расходы" else if(type=="income") "Проделанная работа" else "Что сделать?") }, singleLine = true)
                 if (type != "expense") OutlinedTextField(address, { address = it }, label = { Text("Адрес") }, singleLine = true)
                 OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() } }, label = { Text(if (type == "request") "Договорённая сумма, ₸" else "Сумма, ₸") }, singleLine = true)
                 OutlinedTextField(note, { note = it }, label = { Text("Комментарий") })
