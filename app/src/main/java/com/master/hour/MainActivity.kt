@@ -16,6 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.room.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -67,6 +70,8 @@ private data class HomeAction(val title: String, val icon: ImageVector, val key:
 
 @Composable
 fun MasterApp(dao: EntryDao) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { importHistoricalData(context, dao) }
     var page by remember { mutableStateOf("home") }
     var showAdd by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -84,16 +89,26 @@ fun MasterApp(dao: EntryDao) {
     Scaffold { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
             if (page == "home") {
-                Text("Мастер на час", style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(28.dp))
+                Text("МАСТЕР НА ЧАС", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("Рабочий кабинет", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(14.dp))
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Доход за всё время", style = MaterialTheme.typography.labelLarge)
+                        Text("${incomes.sumOf { it.amount }} ₸", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                        Text("${incomes.size} записей в истории", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
                 actions.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(bottom = 16.dp)) {
                         pair.forEach { action ->
-                            Card(Modifier.weight(1f).height(150.dp).clickable { page = action.key }, shape = RoundedCornerShape(20.dp)) {
+                            Card(Modifier.weight(1f).height(112.dp).clickable { page = action.key }, shape = RoundedCornerShape(20.dp)) {
                                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Icon(action.icon, null, Modifier.size(38.dp))
+                                    Icon(action.icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
                                     Spacer(Modifier.height(12.dp))
-                                    Text(action.title, style = MaterialTheme.typography.titleLarge)
+                                    Text(action.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
