@@ -155,7 +155,7 @@ fun EntryList(entries: List<Entry>, isRequest: Boolean, onDone: (Entry) -> Unit 
                     if (item.address.isNotBlank()) Text(item.address)
                     Text("${item.amount} ₸", style = MaterialTheme.typography.titleLarge)
                     if (item.note.isNotBlank()) Text(item.note)
-                    Text(SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(item.createdAt)), style = MaterialTheme.typography.labelSmall)
+                    Text(formatEntryDate(item.createdAt), style = MaterialTheme.typography.labelSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (isRequest) TextButton(onClick = { onDone(item) }) { Text("✓ Выполнено, в доход") }
                         TextButton(onClick = { onDelete(item) }) { Text("Удалить") }
@@ -210,15 +210,43 @@ fun AddEntryDialog(type: String, onDismiss: () -> Unit, onSave: (String, String,
     )
 }
 
-private fun priceKey(value: String): String = value.lowercase(Locale("ru")).replace('ё', 'е').filter { it.isLetterOrDigit() }
+private fun formatEntryDate(timestamp: Long): String =
+    if (timestamp <= 0L) "Дата не указана"
+    else SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(timestamp))
+
+private fun priceKey(value: String): String =
+    value.lowercase(Locale("ru")).replace('ё', 'е')
+
+private fun editDistance(a: String, b: String): Int {
+    if (kotlin.math.abs(a.length - b.length) > 2) return 3
+    var previous = IntArray(b.length + 1) { it }
+    for (i in a.indices) {
+        val current = IntArray(b.length + 1)
+        current[0] = i + 1
+        for (j in b.indices) {
+            val cost = if (a[i] == b[j]) 0 else 1
+            current[j + 1] = minOf(current[j] + 1, previous[j + 1] + 1, previous[j] + cost)
+        }
+        previous = current
+    }
+    return previous[b.length]
+}
+
+private fun tokenMatches(query: String, candidate: String): Boolean {
+    if (query.length < 3 || candidate.length < 3) return false
+    if (candidate.startsWith(query) || query.startsWith(candidate)) return true
+    return editDistance(query, candidate) <= if (query.length >= 8) 2 else 1
+}
 
 private fun priceMatch(query: String, title: String): Boolean {
-    val q = priceKey(query)
-    val t = priceKey(title)
+    val queryTokens = priceKey(query).filter { it.isLetterOrDigit() }.chunked(1)
+    val titleKey = priceKey(title).filter { it.isLetterOrDigit() }
+    val q = queryTokens.joinToString("")
     if (q.length < 3) return false
-    if (t.contains(q) || q.contains(t)) return true
-    val stem = q.take( maxOf(3, q.length - 2) )
-    return t.contains(stem)
+    if (titleKey.contains(q) || q.contains(titleKey)) return true
+    val words = title.lowercase(Locale("ru")).replace('ё', 'е').split(Regex("[^а-яa-z0-9]+")).filter { it.length >= 3 }
+    val queryWords = query.lowercase(Locale("ru")).replace('ё', 'е').split(Regex("[^а-яa-z0-9]+")).filter { it.length >= 3 }
+    return queryWords.isNotEmpty() && queryWords.all { word -> words.any { tokenMatches(word, it) } }
 }
 
 @Composable
