@@ -7,7 +7,22 @@ plugins {
 android {
     namespace = "com.master.hour"
     compileSdk = 35
-    defaultConfig { applicationId = "com.master.hour"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1.0.0" }
+    defaultConfig { applicationId = "com.master.hour"; minSdk = 26; targetSdk = 35; versionCode = 2; versionName = "1.1.0" }
+    signingConfigs {
+        create("release") {
+            val storeFilePath = System.getenv("KEYSTORE_FILE") ?: "release.keystore"
+            storeFile = file(storeFilePath)
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
