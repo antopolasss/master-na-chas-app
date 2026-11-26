@@ -49,6 +49,7 @@ interface EntryDao {
     @Query("SELECT * FROM entries ORDER BY createdAt DESC")
     fun observeAll(): kotlinx.coroutines.flow.Flow<List<Entry>>
     @Insert suspend fun insert(entry: Entry)
+    @Update suspend fun update(entry: Entry)
     @Delete suspend fun delete(entry: Entry)
     @Query("UPDATE entries SET type = 'income', createdAt = :now WHERE id = :id")
     suspend fun completeRequest(id: Long, now: Long = System.currentTimeMillis())
@@ -140,7 +141,7 @@ fun MasterApp(dao: EntryDao) {
                     Spacer(Modifier.height(8.dp))
                     when(page){
                         "income"->DayLedger(incomes,true,{showAdd=true},{showPicker=true},{item->scope.launch{dao.delete(item)}})
-                        "expense"->ExpenseScreen(expenses,{showAdd=true},{item->scope.launch{dao.delete(item)}},{item,title,amount->scope.launch{dao.insert(item.copy(title=title,amount=amount));dao.delete(item)}})
+                        "expense"->ExpenseScreen(expenses,{showAdd=true},{item->scope.launch{dao.delete(item)}},{item,title,amount->scope.launch{dao.update(item.copy(title=title,amount=amount))}})
                         "request"->RequestScreen(requests,{title,address,amount,note->scope.launch{dao.insert(Entry(type="request",title=title,address=address,amount=amount,note=note))}},{item->scope.launch{dao.completeRequest(item.id)}},{item->scope.launch{dao.delete(item)}})
                         "info"->InfoScreen(incomes,expenses,requests,all)
                         "prices"->PriceSearchScreen(incomes)
