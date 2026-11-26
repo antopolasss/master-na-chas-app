@@ -70,100 +70,144 @@ private data class HomeAction(val title: String, val icon: ImageVector, val key:
 
 @Composable
 fun MasterApp(dao: EntryDao) {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { importHistoricalData(context, dao) }
-    var page by remember { mutableStateOf("home") }
-    var showAdd by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val requests by dao.observe("request").collectAsState(initial = emptyList())
-    val incomes by dao.observe("income").collectAsState(initial = emptyList())
-    val expenses by dao.observe("expense").collectAsState(initial = emptyList())
-    val all by dao.observeAll().collectAsState(initial = emptyList())
-    val actions = listOf(
-        HomeAction("Доход", Icons.Default.AccountBalanceWallet, "income"),
-        HomeAction("Расход", Icons.Default.ShoppingCart, "expense"),
-        HomeAction("Заявки", Icons.Default.CalendarMonth, "request"),
-        HomeAction("Аналитика", Icons.Default.BarChart, "info"),
-        HomeAction("Средняя цена", Icons.Default.Search, "prices")
-    )
-    val titles = mapOf("income" to "Доход", "expense" to "Расход", "request" to "Заявки", "info" to "Аналитика", "prices" to "Средняя цена")
-    Scaffold { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
-            if (page == "home") {
-                Text("МАСТЕР НА ЧАС", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text("Рабочий кабинет", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(14.dp))
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Доход за всё время", style = MaterialTheme.typography.labelLarge)
-                        Text("${incomes.sumOf { it.amount }} ₸", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                        Text("${incomes.size} записей в истории", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                actions.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-                        pair.forEach { action ->
-                            Card(Modifier.weight(1f).height(112.dp).clickable { page = action.key }, shape = RoundedCornerShape(20.dp)) {
-                                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Icon(action.icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(action.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
+    val context=LocalContext.current
+    LaunchedEffect(Unit){importHistoricalData(context,dao)}
+    var page by remember{mutableStateOf("home")}
+    var showAdd by remember{mutableStateOf(false)}
+    var showPicker by remember{mutableStateOf(false)}
+    val scope=rememberCoroutineScope()
+    val requests by dao.observe("request").collectAsState(initial=emptyList())
+    val incomes by dao.observe("income").collectAsState(initial=emptyList())
+    val expenses by dao.observe("expense").collectAsState(initial=emptyList())
+    val all by dao.observeAll().collectAsState(initial=emptyList())
+    val actions=listOf(HomeAction("Доходы",Icons.Default.AccountBalanceWallet,"income"),HomeAction("Расходы",Icons.Default.ShoppingCart,"expense"),HomeAction("Заявки",Icons.Default.CalendarMonth,"request"),HomeAction("Аналитика",Icons.Default.BarChart,"info"),HomeAction("Средняя цена",Icons.Default.Search,"prices"))
+    val titles=mapOf("income" to "Доходы","expense" to "Расходы","request" to "Заявки","info" to "Аналитика","prices" to "Средняя цена")
+    MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF176B55),onPrimary=Color.White,primaryContainer=Color(0xFFDCEFE7),secondary=Color(0xFFB7833F),background=Color(0xFFF5F6F3),surface=Color.White)){
+        Scaffold(containerColor=MaterialTheme.colorScheme.background){padding->
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=18.dp,vertical=14.dp)){
+                if(page=="home"){
+                    Text("МАСТЕР НА ЧАС",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)
+                    Text("Рабочий кабинет",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+                    Spacer(Modifier.height(16.dp))
+                    Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFF176B55))){
+                        Column(Modifier.padding(20.dp)){
+                            Text("ЗАРАБОТАНО ВСЕГО",color=Color.White.copy(alpha=.8f))
+                            Text(incomes.sumOf{it.amount}.toString()+" ₸",color=Color.White,style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
+                            Text(incomes.size.toString()+" выполненных работ",color=Color.White.copy(alpha=.85f))
                         }
                     }
-                }
-                Text("Активных заявок: ${requests.size}", style = MaterialTheme.typography.titleMedium)
-                Text("Доход за всё время: ${incomes.sumOf { it.amount }} ₸")
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { page = "home" }) { Icon(Icons.Default.ArrowBack, "Назад") }
-                    Text(titles[page] ?: "", style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.weight(1f))
-                    if (page != "info") IconButton(onClick = { showAdd = true }) { Icon(Icons.Default.Add, "Добавить") }
-                }
-                Spacer(Modifier.height(12.dp))
-                when (page) {
-                    "request" -> EntryList(requests, true, onDone = { item -> scope.launch { dao.completeRequest(item.id) } }, onDelete = { item -> scope.launch { dao.delete(item) } })
-                    "income" -> EntryList(incomes, false, onDelete = { item -> scope.launch { dao.delete(item) } })
-                    "expense" -> EntryList(expenses, false, onDelete = { item -> scope.launch { dao.delete(item) } })
-                    "info" -> InfoScreen(incomes, expenses, requests, all)
-                    "prices" -> PriceSearchScreen(incomes)
+                    Spacer(Modifier.height(18.dp))
+                    Text("РАБОЧИЕ ИНСТРУМЕНТЫ",color=MaterialTheme.colorScheme.secondary,fontWeight=FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    actions.chunked(2).forEach{pair->
+                        Row(horizontalArrangement=Arrangement.spacedBy(10.dp),modifier=Modifier.padding(bottom=10.dp)){
+                            pair.forEach{action->
+                                Card(Modifier.weight(1f).height(88.dp).clickable{page=action.key},shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+                                    Row(Modifier.fillMaxSize().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                                        Icon(action.icon,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(24.dp))
+                                        Text(action.title,fontWeight=FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                            if(pair.size==1)Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    Text("Активных заявок: "+requests.size,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }else{
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,"Назад")}
+                        Text(titles[page] ?: "",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    when(page){
+                        "income"->DayLedger(incomes,true,{showAdd=true},{showPicker=true},{item->scope.launch{dao.delete(item)}})
+                        "expense"->DayLedger(expenses,false,{showAdd=true},{},{item->scope.launch{dao.delete(item)}})
+                        "request"->EntryList(requests,true,onDone={item->scope.launch{dao.completeRequest(item.id)}},onDelete={item->scope.launch{dao.delete(item)}})
+                        "info"->InfoScreen(incomes,expenses,requests,all)
+                        "prices"->PriceSearchScreen(incomes)
+                    }
                 }
             }
         }
-    }
-    if (showAdd) {
-        val type = page
-        AddEntryDialog(type, onDismiss = { showAdd = false }, onSave = { title, address, amount, note ->
-            scope.launch { dao.insert(Entry(type = type, title = title, address = address, amount = amount, note = note)) }
-            showAdd = false
-        })
+        if(showAdd){
+            val type=page
+            AddEntryDialog(type,{showAdd=false},{title,address,amount,note->
+                scope.launch{dao.insert(Entry(type=type,title=title,address=address,amount=amount,note=note))}
+                showAdd=false
+            })
+        }
+        if(showPicker)AlertDialog(onDismissRequest={showPicker=false},title={Text("Активные заявки")},text={
+            if(requests.isEmpty())Text("Активных заявок пока нет")
+            else LazyColumn{items(requests,key={it.id}){item->
+                Row(Modifier.fillMaxWidth().clickable{scope.launch{dao.completeRequest(item.id);showPicker=false}}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){Text(item.title,fontWeight=FontWeight.SemiBold);if(item.address.isNotBlank())Text(item.address,style=MaterialTheme.typography.bodySmall)}
+                    Text(item.amount.toString()+" ₸",fontWeight=FontWeight.Bold)
+                    Icon(Icons.Default.ChevronRight,null)
+                }
+                HorizontalDivider()
+            }}
+        },confirmButton={TextButton(onClick={showPicker=false}){Text("Закрыть")}})
     }
 }
 
 @Composable
-fun EntryList(entries: List<Entry>, isRequest: Boolean, onDone: (Entry) -> Unit = {}, onDelete: (Entry) -> Unit) {
-    if (entries.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Пока записей нет") }
-    else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(entries, key = { it.id }) { item ->
-            Card {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(item.title, style = MaterialTheme.typography.titleMedium)
-                    if (item.address.isNotBlank()) Text(item.address)
-                    Text("${item.amount} ₸", style = MaterialTheme.typography.titleLarge)
-                    if (item.note.isNotBlank()) Text(item.note)
-                    Text(formatEntryDate(item.createdAt), style = MaterialTheme.typography.labelSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (isRequest) TextButton(onClick = { onDone(item) }) { Text("✓ Выполнено, в доход") }
-                        TextButton(onClick = { onDelete(item) }) { Text("Удалить") }
+fun DayLedger(entries:List<Entry>,isIncome:Boolean,onAdd:()->Unit,onPick:()->Unit,onDelete:(Entry)->Unit){
+    val days=(0..20).map{offset->java.util.Calendar.getInstance().apply{
+        add(java.util.Calendar.DAY_OF_YEAR,-offset)
+        set(java.util.Calendar.HOUR_OF_DAY,0);set(java.util.Calendar.MINUTE,0);set(java.util.Calendar.SECOND,0);set(java.util.Calendar.MILLISECOND,0)
+    }.timeInMillis}
+    Column(Modifier.fillMaxSize()){
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Button(onClick=onAdd,modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Add,null);Text("Новая запись")}
+            if(isIncome)OutlinedButton(onClick=onPick,modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Checklist,null);Text("Выбрать заявки")}
+        }
+        Spacer(Modifier.height(13.dp))
+        Text("ИСТОРИЯ · ПО ДНЯМ",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.secondary,fontWeight=FontWeight.Bold)
+        Spacer(Modifier.height(7.dp))
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(7.dp)){
+            items(days,key={it}){day->
+                val cal=java.util.Calendar.getInstance().apply{timeInMillis=day}
+                val dayEntries=entries.filter{it.createdAt>=day&&it.createdAt<day+86400000L}
+                Card(shape=RoundedCornerShape(14.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+                    Row(Modifier.fillMaxWidth().padding(horizontal=11.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
+                        Column(Modifier.width(48.dp)){
+                            Text(SimpleDateFormat("dd.MM",Locale("ru")).format(Date(day)),fontWeight=FontWeight.Bold)
+                            Text(listOf("вс","пн","вт","ср","чт","пт","сб")[cal.get(java.util.Calendar.DAY_OF_WEEK)-1],style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)){
+                            if(dayEntries.isEmpty())Text("Нет записей",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            else dayEntries.forEach{item->
+                                Row(verticalAlignment=Alignment.CenterVertically){
+                                    Text("• ",color=MaterialTheme.colorScheme.primary)
+                                    Text(item.title,modifier=Modifier.weight(1f),maxLines=1,style=MaterialTheme.typography.bodyMedium)
+                                    IconButton(onClick={onDelete(item)},modifier=Modifier.size(25.dp)){Icon(Icons.Default.Close,"Удалить",modifier=Modifier.size(14.dp))}
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(5.dp))
+                        Text(if(dayEntries.isEmpty())"—" else dayEntries.sumOf{it.amount}.toString()+" ₸",fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun EntryList(entries:List<Entry>,isRequest:Boolean,onDone:(Entry)->Unit={},onDelete:(Entry)->Unit){
+    if(entries.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("Пока записей нет")}
+    else LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)){items(entries,key={it.id}){item->
+        Card(shape=RoundedCornerShape(16.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+            Column(Modifier.fillMaxWidth().padding(15.dp)){
+                Text(item.title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+                if(item.address.isNotBlank())Text(item.address,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(item.amount.toString()+" ₸",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.primary)
+                if(item.note.isNotBlank())Text(item.note)
+                Text(formatEntryDate(item.createdAt),style=MaterialTheme.typography.labelSmall)
+                Row{if(isRequest)TextButton(onClick={onDone(item)}){Text("✓ Выполнено, в доход")};TextButton(onClick={onDelete(item)}){Text("Удалить")}}
+            }
+        }
+    }}
 }
 
 @Composable
