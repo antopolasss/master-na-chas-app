@@ -83,9 +83,10 @@ fun MasterApp(dao: EntryDao) {
         HomeAction("Доход", Icons.Default.AccountBalanceWallet, "income"),
         HomeAction("Расход", Icons.Default.ShoppingCart, "expense"),
         HomeAction("Заявки", Icons.Default.CalendarMonth, "request"),
-        HomeAction("Инфо", Icons.Default.BarChart, "info")
+        HomeAction("Аналитика", Icons.Default.BarChart, "info"),
+        HomeAction("Средняя цена", Icons.Default.Search, "prices")
     )
-    val titles = mapOf("income" to "Доход", "expense" to "Расход", "request" to "Заявки", "info" to "Информация")
+    val titles = mapOf("income" to "Доход", "expense" to "Расход", "request" to "Заявки", "info" to "Аналитика", "prices" to "Средняя цена")
     Scaffold { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
             if (page == "home") {
@@ -129,6 +130,7 @@ fun MasterApp(dao: EntryDao) {
                     "income" -> EntryList(incomes, false, onDelete = { item -> scope.launch { dao.delete(item) } })
                     "expense" -> EntryList(expenses, false, onDelete = { item -> scope.launch { dao.delete(item) } })
                     "info" -> InfoScreen(incomes, expenses, requests, all)
+                    "prices" -> PriceSearchScreen(incomes)
                 }
             }
         }
@@ -206,4 +208,52 @@ fun AddEntryDialog(type: String, onDismiss: () -> Unit, onSave: (String, String,
         confirmButton = { TextButton(enabled = title.isNotBlank() && (amount.toLongOrNull() ?: 0L) > 0, onClick = { onSave(title.trim(), address.trim(), amount.toLong(), note.trim()) }) { Text("Сохранить") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
+}
+
+private fun priceKey(value: String): String = value.lowercase(Locale("ru")).replace('ё', 'е').filter { it.isLetterOrDigit() }
+
+private fun priceMatch(query: String, title: String): Boolean {
+    val q = priceKey(query)
+    val t = priceKey(title)
+    if (q.length < 3) return false
+    if (t.contains(q) || q.contains(t)) return true
+    val stem = q.take( maxOf(3, q.length - 2) )
+    return t.contains(stem)
+}
+
+@Composable
+fun PriceSearchScreen(incomes: List<Entry>) {
+    var query by remember { mutableStateOf("") }
+    val matches = remember(query, incomes) {
+        incomes.filter { item ->
+            val name = priceKey(item.title)
+            !name.contains("кобулетти") && !name.contains("кабулетти") && priceMatch(query, item.title)
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Найди работу по названию", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Например, комод или шкаф") }, singleLine = true)
+        if (query.isNotBlank() && matches.isNotEmpty()) {
+            val average = matches.sumOf { it.amount } / matches.size
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("Средняя цена", style = MaterialTheme.typography.labelLarge)
+                    Text("$average ₸", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("От ${matches.minOf { it.amount }} до ${matches.maxOf { it.amount }} ₸ · ${matches.size} совпадений")
+                }
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(matches.sortedByDescending { it.createdAt }, key = { it.id }) { item ->
+                    Card { Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Text(item.title, fontWeight = FontWeight.Medium); Text(SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(item.createdAt)), style = MaterialTheme.typography.labelSmall) }
+                        Text("${item.amount} ₸", fontWeight = FontWeight.SemiBold)
+                    } }
+                }
+            }
+        } else if (query.isNotBlank()) {
+            Text("Похожих работ пока не нашёл. Попробуй короче или иначе написать название.")
+        } else {
+            Text("Введи название работы. Я найду похожие записи в истории и посчитаю среднюю стоимость.", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
