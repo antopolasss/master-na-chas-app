@@ -203,7 +203,7 @@ fun ExpenseScreen(entries:List<Entry>,onAdd:()->Unit,onDelete:(Entry)->Unit){
         LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(entries,key={it.id}){item->
             Card{Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
                 Text(item.title,Modifier.weight(1f),fontWeight=FontWeight.Medium)
-                Text("\${item.amount} ₸",fontWeight=FontWeight.Bold)
+                Text("${item.amount} ₸",fontWeight=FontWeight.Bold)
                 IconButton(onClick={onDelete(item)}){Icon(Icons.Default.Close,"Удалить")}
             }}
         }}
@@ -222,10 +222,10 @@ fun RequestScreen(entries:List<Entry>,onCreate:(String,String,Long,String)->Unit
             OutlinedTextField(note,{note=it},modifier=Modifier.fillMaxWidth(),label={Text("Детали и комментарии")})
             Button(onClick={onCreate(title.trim(),address.trim(),amount.toLongOrNull()?:0L,note.trim());title="";address="";amount="";note=""},enabled=title.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("Создать заявку")}
         }}}
-        item{Text("АКТИВНЫЕ ЗАЯВКИ · \${entries.size}",fontWeight=FontWeight.Bold)}
+        item{Text("АКТИВНЫЕ ЗАЯВКИ · ${entries.size}",fontWeight=FontWeight.Bold)}
         if(entries.isEmpty())item{Text("Пока нет активных заявок")}
         items(entries,key={it.id}){item->Card{Column(Modifier.padding(14.dp)){
-            Text(item.title,fontWeight=FontWeight.SemiBold);Text(item.address);Text("\${item.amount} ₸")
+            Text(item.title,fontWeight=FontWeight.SemiBold);Text(item.address);Text("${item.amount} ₸")
             TextButton(onClick={onDone(item)}){Text("Выполнено → в доход")}
             TextButton(onClick={onDelete(item)}){Text("Удалить")}
         }}}
