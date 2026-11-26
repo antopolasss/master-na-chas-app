@@ -3,6 +3,7 @@ package com.master.hour
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -80,9 +81,9 @@ fun MasterApp(dao: EntryDao) {
     val incomes by dao.observe("income").collectAsState(initial=emptyList())
     val expenses by dao.observe("expense").collectAsState(initial=emptyList())
     val all by dao.observeAll().collectAsState(initial=emptyList())
-    val actions=listOf(HomeAction("Доходы",Icons.Default.AccountBalanceWallet,"income"),HomeAction("Расходы",Icons.Default.ShoppingCart,"expense"),HomeAction("Заявки",Icons.Default.CalendarMonth,"request"),HomeAction("Аналитика",Icons.Default.BarChart,"info"),HomeAction("Средняя цена",Icons.Default.Search,"prices"))
-    val titles=mapOf("income" to "Доходы","expense" to "Расходы","request" to "Заявки","info" to "Аналитика","prices" to "Средняя цена")
-    MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF176B55),onPrimary=Color.White,primaryContainer=Color(0xFFDCEFE7),secondary=Color(0xFFB7833F),background=Color(0xFFF5F6F3),surface=Color.White)){
+    val actions=listOf(HomeAction("Доходы",Icons.Default.AccountBalanceWallet,"income"),HomeAction("Расходы",Icons.Default.ShoppingCart,"expense"),HomeAction("Заявки",Icons.Default.CalendarMonth,"request"),HomeAction("Аналитика",Icons.Default.BarChart,"info"),HomeAction("Материалы",Icons.Default.CollectionsBookmark,"materials"),HomeAction("Средняя цена",Icons.Default.Search,"prices"))
+    val titles=mapOf("income" to "Доходы","expense" to "Расходы","request" to "Заявки","info" to "Аналитика","prices" to "Средняя цена","materials" to "Материалы")
+    MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF315C73),onPrimary=Color.White,primaryContainer=Color(0xFFDCE8EF),secondary=Color(0xFFC07A45),background=Color(0xFFF3F5F7),surface=Color.White)){
         Scaffold(containerColor=MaterialTheme.colorScheme.background){padding->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=18.dp,vertical=14.dp)){
                 if(page=="home"){
@@ -121,10 +122,11 @@ fun MasterApp(dao: EntryDao) {
                     Spacer(Modifier.height(8.dp))
                     when(page){
                         "income"->DayLedger(incomes,true,{showAdd=true},{showPicker=true},{item->scope.launch{dao.delete(item)}})
-                        "expense"->DayLedger(expenses,false,{showAdd=true},{},{item->scope.launch{dao.delete(item)}})
-                        "request"->EntryList(requests,true,onDone={item->scope.launch{dao.completeRequest(item.id)}},onDelete={item->scope.launch{dao.delete(item)}})
+                        "expense"->ExpenseScreen(expenses,{showAdd=true},{item->scope.launch{dao.delete(item)}})
+                        "request"->RequestScreen(requests,{title,address,amount,note->scope.launch{dao.insert(Entry(type="request",title=title,address=address,amount=amount,note=note))}},{item->scope.launch{dao.completeRequest(item.id)}},{item->scope.launch{dao.delete(item)}})
                         "info"->InfoScreen(incomes,expenses,requests,all)
                         "prices"->PriceSearchScreen(incomes)
+                        "materials"->MaterialScreen(all.filter{it.type=="material"},{title,uri,mime->scope.launch{dao.insert(Entry(type="material",title=title,address=uri,note=mime,amount=0))}},{item->scope.launch{dao.delete(item)}})
                     }
                 }
             }
@@ -194,6 +196,66 @@ fun DayLedger(entries:List<Entry>,isIncome:Boolean,onAdd:()->Unit,onPick:()->Uni
 }
 
 @Composable
+fun ExpenseScreen(entries:List<Entry>,onAdd:()->Unit,onDelete:(Entry)->Unit){
+    Column(Modifier.fillMaxSize()){
+        Button(onClick=onAdd,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Text("Добавить расход")}
+        Spacer(Modifier.height(10.dp))
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(entries,key={it.id}){item->
+            Card{Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                Text(item.title,Modifier.weight(1f),fontWeight=FontWeight.Medium)
+                Text("\${item.amount} ₸",fontWeight=FontWeight.Bold)
+                IconButton(onClick={onDelete(item)}){Icon(Icons.Default.Close,"Удалить")}
+            }}
+        }}
+    }
+}
+
+@Composable
+fun RequestScreen(entries:List<Entry>,onCreate:(String,String,Long,String)->Unit,onDone:(Entry)->Unit,onDelete:(Entry)->Unit){
+    var title by remember{mutableStateOf("")};var address by remember{mutableStateOf("")};var amount by remember{mutableStateOf("")};var note by remember{mutableStateOf("")}
+    LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)){
+        item{Card{Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Text("Новая заявка",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+            OutlinedTextField(title,{title=it},modifier=Modifier.fillMaxWidth(),label={Text("Какая работа нужна?")})
+            OutlinedTextField(address,{address=it},modifier=Modifier.fillMaxWidth(),label={Text("Адрес")})
+            OutlinedTextField(amount,{amount=it.filter{c->c.isDigit()}},modifier=Modifier.fillMaxWidth(),label={Text("Сумма, ₸")})
+            OutlinedTextField(note,{note=it},modifier=Modifier.fillMaxWidth(),label={Text("Детали и комментарии")})
+            Button(onClick={onCreate(title.trim(),address.trim(),amount.toLongOrNull()?:0L,note.trim());title="";address="";amount="";note=""},enabled=title.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("Создать заявку")}
+        }}}
+        item{Text("АКТИВНЫЕ ЗАЯВКИ · \${entries.size}",fontWeight=FontWeight.Bold)}
+        if(entries.isEmpty())item{Text("Пока нет активных заявок")}
+        items(entries,key={it.id}){item->Card{Column(Modifier.padding(14.dp)){
+            Text(item.title,fontWeight=FontWeight.SemiBold);Text(item.address);Text("\${item.amount} ₸")
+            TextButton(onClick={onDone(item)}){Text("Выполнено → в доход")}
+            TextButton(onClick={onDelete(item)}){Text("Удалить")}
+        }}}
+    }
+}
+
+@Composable
+fun MaterialScreen(entries:List<Entry>,onSave:(String,String,String)->Unit,onDelete:(Entry)->Unit){
+    val context=LocalContext.current
+    var chosen by remember{mutableStateOf<android.net.Uri?>(null)}
+    var title by remember{mutableStateOf("")}
+    val picker=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()){uri->
+        if(uri!=null){try{context.contentResolver.takePersistableUriPermission(uri,android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){};chosen=uri}
+    }
+    Column(Modifier.fillMaxSize()){
+        Button(onClick={picker.launch(arrayOf("image/*","video/*"))},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Text("Добавить фото или видео")}
+        Text("Рабочие схемы, размеры и инструкции",style=MaterialTheme.typography.bodySmall)
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(entries,key={it.id}){item->
+            Card{Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                Icon(if(item.note.startsWith("video/"))Icons.Default.PlayCircle else Icons.Default.Image,null)
+                Text(item.title,Modifier.weight(1f).padding(horizontal=10.dp),fontWeight=FontWeight.Medium)
+                IconButton(onClick={runCatching{context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(android.net.Uri.parse(item.address),item.note).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))}}){Icon(Icons.Default.OpenInNew,"Открыть")}
+                IconButton(onClick={onDelete(item)}){Icon(Icons.Default.Delete,"Удалить")}
+            }}
+        }}
+    }
+    if(chosen!=null)AlertDialog(onDismissRequest={chosen=null},title={Text("Название материала")},text={OutlinedTextField(title,{title=it},label={Text("Например, установка газлифта")})},confirmButton={TextButton(enabled=title.isNotBlank(),onClick={val u=chosen!!;onSave(title.trim(),u.toString(),context.contentResolver.getType(u)?:"application/octet-stream");chosen=null}){Text("Сохранить")}},dismissButton={TextButton(onClick={chosen=null}){Text("Отмена")}})
+}
+
+@Composable
 fun EntryList(entries:List<Entry>,isRequest:Boolean,onDone:(Entry)->Unit={},onDelete:(Entry)->Unit){
     if(entries.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("Пока записей нет")}
     else LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)){items(entries,key={it.id}){item->
@@ -216,13 +278,36 @@ fun InfoScreen(incomes: List<Entry>, expenses: List<Entry>, requests: List<Entry
     val expense = expenses.sumOf { it.amount }
     val week = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
     val weekIncome = incomes.filter { it.createdAt >= week }.sumOf { it.amount }
+    val weekExpense = expenses.filter { it.createdAt >= week }.sumOf { it.amount }
+    val month = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+    val monthIncome = incomes.filter { it.createdAt >= month }.sumOf { it.amount }
+    val monthExpense = expenses.filter { it.createdAt >= month }.sumOf { it.amount }
+    val average = if(incomes.isEmpty()) 0L else income/incomes.size
+    val calDays = (0..29).map { offset -> java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR,-offset); set(java.util.Calendar.HOUR_OF_DAY,0);set(java.util.Calendar.MINUTE,0);set(java.util.Calendar.SECOND,0);set(java.util.Calendar.MILLISECOND,0) }.timeInMillis }.reversed()
+    val daily = calDays.map { day -> incomes.filter { it.createdAt >= day && it.createdAt < day + 86400000L }.sumOf { it.amount } }
+    val maxDaily = (daily.maxOrNull() ?: 0L).coerceAtLeast(1L)
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { StatCard("Доход за всё время", income) }
         item { StatCard("Расходы за всё время", expense) }
         item { StatCard("Чистый результат", income - expense) }
         item { StatCard("Доход за 7 дней", weekIncome) }
+        item { StatCard("Расход за 7 дней", weekExpense) }
+        item { StatCard("Доход за 30 дней", monthIncome) }
+        item { StatCard("Расход за 30 дней", monthExpense) }
+        item { StatCard("Средний чек", average) }
+        item { Text("ЗАРАБОТОК ПО ДНЯМ · 30 ДНЕЙ",fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.secondary) }
+        items(calDays.size) { index ->
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Text(SimpleDateFormat("dd.MM",Locale("ru")).format(Date(calDays[index])),modifier=Modifier.width(48.dp),style=MaterialTheme.typography.labelSmall)
+                Box(Modifier.weight(1f).height(14.dp).padding(end=8.dp)) {
+                    Box(Modifier.fillMaxWidth(daily[index].toFloat()/maxDaily).height(14.dp).then(Modifier).background(MaterialTheme.colorScheme.primary,RoundedCornerShape(8.dp)))
+                }
+                Text("${daily[index]} ₸",style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.SemiBold)
+            }
+        }
+        item { Text("Выполнено работ: ${incomes.size}", style = MaterialTheme.typography.titleMedium) }
         item { Text("Активных заявок: ${requests.size}", style = MaterialTheme.typography.titleMedium) }
-        item { Text("Всего операций: ${all.size}") }
+        item { Text("Всего операций: ${all.count{it.type!="material"}}") }
     }
 }
 
@@ -243,7 +328,7 @@ fun AddEntryDialog(type: String, onDismiss: () -> Unit, onSave: (String, String,
         title = { Text(label) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text(if (type == "expense") "Что купил" else "Что сделать / за что получил") }, singleLine = true)
+                OutlinedTextField(title, { title = it }, label = { Text(if (type == "expense") "На что потратил" else if(type=="income") "Проделанная работа" else "Что сделать?") }, singleLine = true)
                 if (type != "expense") OutlinedTextField(address, { address = it }, label = { Text("Адрес") }, singleLine = true)
                 OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() } }, label = { Text(if (type == "request") "Договорённая сумма, ₸" else "Сумма, ₸") }, singleLine = true)
                 OutlinedTextField(note, { note = it }, label = { Text("Комментарий") })
